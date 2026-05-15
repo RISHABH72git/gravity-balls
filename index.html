@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Balls</title>
+<title>gravity-balls v2</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #f7f4ef; }
@@ -16,66 +16,208 @@
     border-radius: 50%;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    transition: width 0.15s, height 0.15s, border-color 0.15s, background 0.15s;
+    transition: width 0.15s, height 0.15s, background 0.15s, border-color 0.15s;
     z-index: 9999;
-    mix-blend-mode: multiply;
+  }
+
+  /* gravity anchor indicator */
+  #gravity-dot {
+    position: fixed;
+    width: 8px; height: 8px;
+    background: rgba(26,26,46,0.25);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: left 0.6s cubic-bezier(.22,.68,0,1.2), top 0.6s cubic-bezier(.22,.68,0,1.2), opacity 0.3s;
+    z-index: 9997;
+    box-shadow: 0 0 10px 3px rgba(255,255,255,0.1);
   }
 
   .ripple {
     position: fixed;
     border-radius: 50%;
     pointer-events: none;
-    border: 2px solid rgba(230,57,70,0.5);
+    border: 2px solid rgba(255,120,80,0.55);
     transform: translate(-50%,-50%) scale(0);
     animation: rpl 0.6s ease-out forwards;
     z-index: 9998;
   }
   @keyframes rpl { to { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 10px;
+    z-index: 9999;
+    font-family: 'SF Mono', monospace;
+  }
+
+  .hud-pill {
+    background: rgba(26,26,46,0.07);
+    border: 1px solid rgba(26,26,46,0.15);
+    color: rgba(26,26,46,0.55);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    padding: 5px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+  }
+
+  .hud-pill kbd {
+    background: rgba(26,26,46,0.12);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.68rem;
+    color: rgba(26,26,46,0.8);
+  }
+
+  /* mode badge */
+  #mode-badge {
+    position: fixed;
+    top: 20px; right: 20px;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: rgba(26,26,46,0.4);
+    z-index: 9999;
+    text-transform: uppercase;
+    transition: color 0.3s;
+  }
 </style>
 </head>
 <body>
 <div id="cursor"></div>
+<div id="gravity-dot"></div>
+<div id="mode-badge">gravity · center</div>
 <canvas id="c"></canvas>
+
+<div id="hud">
+  <span class="hud-pill"><kbd>Hover</kbd> repel</span>
+  <span class="hud-pill"><kbd>Click</kbd> explode</span>
+  <span class="hud-pill"><kbd>G</kbd> gravity to cursor</span>
+  <span class="hud-pill"><kbd>R</kbd> reset</span>
+</div>
+
 <script>
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const cur = document.getElementById('cursor');
+const ctx    = canvas.getContext('2d');
+const curEl  = document.getElementById('cursor');
+const gravDot = document.getElementById('gravity-dot');
+const modeBadge = document.getElementById('mode-badge');
 
-let W, H, cx, cy; // cx,cy = screen center (gravity point)
+let W, H;
+// gravity target — starts at center, can follow cursor
+let gx, gy;
+let gravityFollowsMouse = false;
+
 function resize() {
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  cx = W / 2;
-  cy = H / 2;
+  if (!gravityFollowsMouse) { gx = W/2; gy = H/2; }
+  // reposition gravity dot if center mode
+  if (!gravityFollowsMouse) {
+    gravDot.style.left = gx + 'px';
+    gravDot.style.top  = gy + 'px';
+  }
 }
 resize();
 window.addEventListener('resize', resize);
 
-/* ── palette ── */
-const PAL = [
+/* ── palette stored as RGB arrays to avoid NaN ── */
+const PAL_HEX = [
   '#e63946','#457b9d','#f4a261','#2a9d8f',
   '#e9c46a','#9b5de5','#e76f51','#4cc9f0',
   '#c77dff','#f72585','#06d6a0','#118ab2',
 ];
 
+function hexToRgb(hex) {
+  const h = hex.replace('#','');
+  return [
+    parseInt(h.slice(0,2),16),
+    parseInt(h.slice(2,4),16),
+    parseInt(h.slice(4,6),16),
+  ];
+}
+
+const PAL = PAL_HEX.map(hexToRgb); // [[r,g,b], ...]
+
+function lerpColor(a, b, t) {
+  return [
+    ~~(a[0] + (b[0]-a[0])*t),
+    ~~(a[1] + (b[1]-a[1])*t),
+    ~~(a[2] + (b[2]-a[2])*t),
+  ];
+}
+
+function toRgb([r,g,b]) { return `rgb(${r},${g},${b})`; }
+
+// slow → cool blue, medium → base color, fast → hot red
+const COOL = [76, 201, 240];
+const HOT  = [255, 72, 0];
+
+function speedColor(baseRgb, speed, maxSpeed) {
+  const t = Math.min(speed / maxSpeed, 1);
+  if (t < 0.5) return toRgb(lerpColor(COOL, baseRgb, t * 2));
+  return toRgb(lerpColor(baseRgb, HOT, (t - 0.5) * 2));
+}
+
+function lighten(rgb, t) {
+  return toRgb(rgb.map(c => ~~(c + (255-c)*t)));
+}
+
 /* ── mouse ── */
-let mx = -9999, my = -9999;   // raw mouse (off-screen default = no repulsion)
-let smx = -9999, smy = -9999; // smoothed
+let mx = -9999, my = -9999;
+let smx = -9999, smy = -9999;
 let pressing = false;
 
 document.addEventListener('mousemove', e => {
   mx = e.clientX; my = e.clientY;
-  cur.style.left = mx + 'px';
-  cur.style.top  = my + 'px';
+  curEl.style.left = mx + 'px';
+  curEl.style.top  = my + 'px';
+  if (gravityFollowsMouse) {
+    gx = mx; gy = my;
+    gravDot.style.left = gx + 'px';
+    gravDot.style.top  = gy + 'px';
+  }
 });
 document.addEventListener('mouseleave', () => { mx = -9999; my = -9999; });
 
+/* ── keyboard ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'g' || e.key === 'G') {
+    gravityFollowsMouse = !gravityFollowsMouse;
+    if (!gravityFollowsMouse) {
+      gx = W/2; gy = H/2;
+      gravDot.style.left = gx + 'px';
+      gravDot.style.top  = gy + 'px';
+      gravDot.style.opacity = '1';
+      modeBadge.textContent = 'gravity · center';
+      modeBadge.style.color = 'rgba(255,255,255,0.4)';
+    } else {
+      gx = mx > 0 ? mx : W/2;
+      gy = my > 0 ? my : H/2;
+      gravDot.style.left = gx + 'px';
+      gravDot.style.top  = gy + 'px';
+      gravDot.style.opacity = '1';
+      modeBadge.textContent = 'gravity · cursor ●';
+      modeBadge.style.color = 'rgba(255,200,80,0.85)';
+    }
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    balls.forEach(b => b.respawn());
+  }
+});
+
+/* ── click ── */
 function boom(x, y) {
   balls.forEach(b => {
     const dx = b.x - x, dy = b.y - y;
     const d = Math.sqrt(dx*dx + dy*dy);
-    if (d < 200 && d > 0) {
-      const f = ((200 - d) / 200) * 8;
+    if (d < 220 && d > 0) {
+      const f = ((220 - d) / 220) * 9 / b.mass;
       b.vx += (dx/d) * f;
       b.vy += (dy/d) * f;
     }
@@ -85,114 +227,142 @@ function boom(x, y) {
 function ripple(x, y) {
   const el = document.createElement('div');
   el.className = 'ripple';
-  el.style.cssText = `left:${x}px;top:${y}px;width:160px;height:160px`;
+  el.style.cssText = `left:${x}px;top:${y}px;width:180px;height:180px`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 700);
 }
 
 document.addEventListener('mousedown', e => {
   pressing = true;
-  cur.style.width = '26px'; cur.style.height = '26px';
-  cur.style.background = 'rgba(230,57,70,0.15)';
+  curEl.style.width = '26px'; curEl.style.height = '26px';
+  curEl.style.background = 'rgba(255,100,60,0.18)';
   ripple(e.clientX, e.clientY);
   boom(e.clientX, e.clientY);
 });
 document.addEventListener('mouseup', () => {
   pressing = false;
-  cur.style.width = '14px'; cur.style.height = '14px';
-  cur.style.background = 'transparent';
+  curEl.style.width = '14px'; curEl.style.height = '14px';
+  curEl.style.background = 'transparent';
 });
 
 /* touch */
 document.addEventListener('touchmove', e => {
   e.preventDefault();
   mx = e.touches[0].clientX; my = e.touches[0].clientY;
+  if (gravityFollowsMouse) { gx = mx; gy = my; }
 }, { passive: false });
 document.addEventListener('touchstart', e => {
   mx = e.touches[0].clientX; my = e.touches[0].clientY;
-  boom(mx, my);
+  boom(mx, my); ripple(mx, my);
 });
 document.addEventListener('touchend', () => { mx = -9999; my = -9999; });
 
 /* ── Ball ── */
+const MAX_SPEED = 12;
+
 class Ball {
-  constructor() {
-    // start near center with a small random offset
+  constructor() { this.init(true); }
+
+  init(first = false) {
     const angle = Math.random() * Math.PI * 2;
-    const dist  = Math.random() * 60;
-    this.x  = cx + Math.cos(angle) * dist;
-    this.y  = cy + Math.sin(angle) * dist;
+    const dist  = Math.random() * 80;
+    this.x  = (gx || W/2) + Math.cos(angle) * dist;
+    this.y  = (gy || H/2) + Math.sin(angle) * dist;
     this.vx = (Math.random() - 0.5) * 1.2;
     this.vy = (Math.random() - 0.5) * 1.2;
     this.r  = Math.random() * 14 + 5;
-    this.color = PAL[Math.floor(Math.random() * PAL.length)];
-    this.baseAlpha = Math.random() * 0.35 + 0.35;
-    this.alpha = this.baseAlpha;
+    this.mass = (this.r / 10) ** 2;        // mass ∝ area
+    this.baseColor = PAL[Math.floor(Math.random() * PAL.length)]; // [r,g,b]
+    this.baseAlpha = Math.random() * 0.3 + 0.5;
+    this.alpha  = this.baseAlpha;
     this.wobble = Math.random() * Math.PI * 2;
-    // each ball has a tiny natural drift angle so the cluster breathes
     this.driftA = Math.random() * Math.PI * 2;
     this.driftS = 0.003 + Math.random() * 0.004;
+    this.trail  = []; // v2: motion trail
   }
 
+  respawn() { this.init(false); this.trail = []; }
+
   update() {
-    /* 1. gravity toward center */
-    const toCx = cx - this.x;
-    const toCy = cy - this.y;
-    const distC = Math.sqrt(toCx*toCx + toCy*toCy);
+    /* gravity toward gx,gy */
+    const toCx = gx - this.x;
+    const toCy = gy - this.y;
+    const distG = Math.sqrt(toCx*toCx + toCy*toCy) || 1;
+    const gStr  = (0.018 + Math.min(distG, 300) * 0.00012) / this.mass;
+    this.vx += (toCx/distG) * gStr * distG * 0.015;
+    this.vy += (toCy/distG) * gStr * distG * 0.015;
 
-    // stronger gravity the farther away — keeps cluster tight
-    const gStrength = 0.018 + Math.min(distC, 300) * 0.00012;
-    this.vx += (toCx / distC) * gStrength * distC * 0.015;
-    this.vy += (toCy / distC) * gStrength * distC * 0.015;
-
-    /* 2. soft collision / repulsion with other balls (done in loop below) */
-
-    /* 3. mouse repulsion */
-    const REPEL = pressing ? 180 : 130;
-    const FMUL  = pressing ? 2.2 : 1.2;
+    /* mouse repulsion */
+    const REPEL = pressing ? 190 : 135;
+    const FMUL  = pressing ? 2.4 : 1.3;
     const dxm = this.x - smx, dym = this.y - smy;
-    const dm  = Math.sqrt(dxm*dxm + dym*dym);
-    if (dm < REPEL && dm > 0) {
+    const dm  = Math.sqrt(dxm*dxm + dym*dym) || 1;
+    if (dm < REPEL) {
       const force = (REPEL - dm) / REPEL;
-      this.vx += (dxm/dm) * force * FMUL;
-      this.vy += (dym/dm) * force * FMUL;
-      this.alpha = Math.min(0.98, this.baseAlpha + force * 0.45);
+      this.vx += (dxm/dm) * force * FMUL / this.mass;
+      this.vy += (dym/dm) * force * FMUL / this.mass;
+      this.alpha = Math.min(0.98, this.baseAlpha + force * 0.35);
     } else {
       this.alpha += (this.baseAlpha - this.alpha) * 0.07;
     }
 
-    /* 4. gentle organic drift */
+    /* organic drift */
     this.driftA += this.driftS;
-    this.vx += Math.cos(this.driftA) * 0.015;
-    this.vy += Math.sin(this.driftA) * 0.015;
+    this.vx += Math.cos(this.driftA) * 0.012;
+    this.vy += Math.sin(this.driftA) * 0.012;
 
-    /* 5. damping */
+    /* damping */
     this.vx *= 0.978;
     this.vy *= 0.978;
 
-    /* 6. speed cap */
+    /* speed cap (mass-aware — big balls cap lower) */
     const spd = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
-    const MAX = pressing ? 10 : 5;
-    if (spd > MAX) { this.vx = this.vx/spd*MAX; this.vy = this.vy/spd*MAX; }
+    const cap = (pressing ? MAX_SPEED : MAX_SPEED * 0.6) / this.mass;
+    if (spd > cap) { this.vx = this.vx/spd*cap; this.vy = this.vy/spd*cap; }
 
     this.x += this.vx;
     this.y += this.vy;
     this.wobble += 0.02;
+    this.speed = spd;
+
+    /* trail — store last 10 positions */
+    this.trail.push({x: this.x, y: this.y});
+    if (this.trail.length > 10) this.trail.shift();
   }
 
   draw() {
-    const pr = this.r + Math.sin(this.wobble) * 0.6;
+    const spd   = this.speed || 0;
+    const color = speedColor(this.baseColor, spd, MAX_SPEED * 0.5);
+    const pr    = this.r + Math.sin(this.wobble) * 0.6;
+
+    /* trail */
+    if (spd > 0.8 && this.trail.length > 2) {
+      for (let i = 1; i < this.trail.length; i++) {
+        const t = i / this.trail.length;
+        const tp = this.trail[i-1], tc = this.trail[i];
+        ctx.save();
+        ctx.globalAlpha = t * 0.22 * this.alpha;
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = pr * t * 1.1;
+        ctx.lineCap     = 'round';
+        ctx.beginPath();
+        ctx.moveTo(tp.x, tp.y);
+        ctx.lineTo(tc.x, tc.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /* ball */
     ctx.save();
     ctx.globalAlpha = this.alpha;
-
-    // radial gradient for soft glow
     const g = ctx.createRadialGradient(
-      this.x - pr*0.28, this.y - pr*0.28, pr*0.04,
+      this.x - pr*0.3, this.y - pr*0.3, pr*0.04,
       this.x, this.y, pr
     );
-    g.addColorStop(0, lighten(this.color, 0.6));
-    g.addColorStop(1, this.color);
-
+    const colorRgb = color.match(/\d+/g).map(Number);
+    g.addColorStop(0, lighten(colorRgb, 0.65));
+    g.addColorStop(1, color);
     ctx.beginPath();
     ctx.arc(this.x, this.y, pr, 0, Math.PI*2);
     ctx.fillStyle = g;
@@ -201,40 +371,35 @@ class Ball {
   }
 }
 
-function lighten(hex, t) {
-  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
-  return `rgb(${r+~~((255-r)*t)},${g+~~((255-g)*t)},${b+~~((255-b)*t)})`;
-}
-
 /* ── init ── */
+gx = W/2; gy = H/2;
+gravDot.style.left = gx + 'px';
+gravDot.style.top  = gy + 'px';
+
 const N = 80;
 const balls = Array.from({length: N}, () => new Ball());
 
-/* ── ball-ball soft repulsion ── */
+/* ── collision ── */
 function applyCollisions() {
   for (let i = 0; i < balls.length; i++) {
     for (let j = i+1; j < balls.length; j++) {
       const a = balls[i], b = balls[j];
       const dx = a.x - b.x, dy = a.y - b.y;
-      const d  = Math.sqrt(dx*dx + dy*dy);
+      const d  = Math.sqrt(dx*dx + dy*dy) || 0.001;
       const minD = a.r + b.r + 1;
-      if (d < minD && d > 0) {
-        // push apart so they no longer overlap
+      if (d < minD) {
         const push = (minD - d) / 2;
-        const nx = dx / d, ny = dy / d;
-        a.x += nx * push;
-        a.y += ny * push;
-        b.x -= nx * push;
-        b.y -= ny * push;
-        // reflect velocities along collision normal
+        const nx = dx/d, ny = dy/d;
+        a.x += nx * push; a.y += ny * push;
+        b.x -= nx * push; b.y -= ny * push;
         const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
-        const dot = dvx * nx + dvy * ny;
+        const dot = dvx*nx + dvy*ny;
         if (dot < 0) {
-          const restitution = 0.55;
-          a.vx -= (1 + restitution) * 0.5 * dot * nx;
-          a.vy -= (1 + restitution) * 0.5 * dot * ny;
-          b.vx += (1 + restitution) * 0.5 * dot * nx;
-          b.vy += (1 + restitution) * 0.5 * dot * ny;
+          const res = 0.55;
+          const ma = a.mass, mb = b.mass, mt = ma + mb;
+          const impulse = (1 + res) * dot / mt;
+          a.vx -= impulse * mb * nx; a.vy -= impulse * mb * ny;
+          b.vx += impulse * ma * nx; b.vy += impulse * ma * ny;
         }
       }
     }
@@ -244,14 +409,28 @@ function applyCollisions() {
 /* ── dot grid ── */
 function drawGrid() {
   ctx.save();
-  ctx.globalAlpha = 0.045;
+  ctx.globalAlpha = 0.04;
   ctx.fillStyle = '#1a1a2e';
-  for (let gx = 40; gx < W; gx += 40)
-    for (let gy = 40; gy < H; gy += 40) {
+  for (let gxp = 40; gxp < W; gxp += 40)
+    for (let gyp = 40; gyp < H; gyp += 40) {
       ctx.beginPath();
-      ctx.arc(gx, gy, 1.1, 0, Math.PI*2);
+      ctx.arc(gxp, gyp, 1.0, 0, Math.PI*2);
       ctx.fill();
     }
+  ctx.restore();
+}
+
+/* ── gravity pulse ring ── */
+let pulseR = 0;
+function drawGravityPulse() {
+  pulseR = (pulseR + 0.6) % 80;
+  ctx.save();
+  ctx.globalAlpha = (1 - pulseR/80) * 0.12;
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(gx, gy, pulseR, 0, Math.PI*2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -260,8 +439,12 @@ function loop() {
   smx += (mx - smx) * 0.12;
   smy += (my - smy) * 0.12;
 
-  ctx.clearRect(0, 0, W, H);
+  // dark bg with slight fade for subtle trail persistence
+  ctx.fillStyle = 'rgba(247,244,239,0.92)';
+  ctx.fillRect(0, 0, W, H);
+
   drawGrid();
+  drawGravityPulse();
   applyCollisions();
   balls.forEach(b => { b.update(); b.draw(); });
   requestAnimationFrame(loop);
