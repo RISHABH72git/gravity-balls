@@ -3,221 +3,269 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>gravity-balls v2</title>
+<title>gravity-balls · breathe</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #f7f4ef; }
-  canvas { display: block; width: 100%; height: 100%; cursor: none; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap');
 
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+
+  body {
+    background: #1a1a2e;
+    font-family: 'Inter', sans-serif;
+    transition: background 2s ease;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; cursor: none; position: fixed; inset: 0; }
+
+  /* custom cursor — soft circle */
   #cursor {
     position: fixed;
-    width: 14px; height: 14px;
-    border: 2px solid #1a1a2e;
+    width: 40px; height: 40px;
     border-radius: 50%;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    transition: width 0.15s, height 0.15s, background 0.15s, border-color 0.15s;
+    z-index: 9999;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.04);
+    transition: width 0.4s ease, height 0.4s ease, background 0.4s ease, border-color 0.4s;
+    backdrop-filter: blur(2px);
+  }
+  #cursor.pressing {
+    width: 70px; height: 70px;
+    background: rgba(255,255,255,0.08);
+  }
+
+  /* breathe ring — ambient pulse in center */
+  #breathe {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    border: 1px solid rgba(255,255,255,0.06);
+    animation: breathe 6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%,100% { width: 80px; height: 80px; opacity: 0.4; }
+    50%      { width: 160px; height: 160px; opacity: 0.1; }
+  }
+
+  /* top message */
+  #message {
+    position: fixed;
+    top: 32px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    font-weight: 300;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.25);
+    z-index: 9999;
+    pointer-events: none;
+    transition: opacity 1s;
+    white-space: nowrap;
+  }
+
+  /* mood selector */
+  #moods {
+    position: fixed;
+    bottom: 28px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 10px;
     z-index: 9999;
   }
 
-  /* gravity anchor indicator */
-  #gravity-dot {
-    position: fixed;
-    width: 8px; height: 8px;
-    background: rgba(26,26,46,0.25);
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    transition: left 0.6s cubic-bezier(.22,.68,0,1.2), top 0.6s cubic-bezier(.22,.68,0,1.2), opacity 0.3s;
-    z-index: 9997;
-    box-shadow: 0 0 10px 3px rgba(255,255,255,0.1);
+  .mood-btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.45);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    padding: 6px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: background 0.3s, color 0.3s, border-color 0.3s, transform 0.2s;
+    backdrop-filter: blur(10px);
+  }
+  .mood-btn:hover { transform: translateY(-2px); }
+  .mood-btn.active {
+    background: rgba(255,255,255,0.16);
+    border-color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.9);
   }
 
+  /* ripple */
   .ripple {
     position: fixed;
     border-radius: 50%;
     pointer-events: none;
-    border: 2px solid rgba(255,120,80,0.55);
+    border: 1px solid rgba(255,255,255,0.25);
     transform: translate(-50%,-50%) scale(0);
-    animation: rpl 0.6s ease-out forwards;
+    animation: rpl 1.2s ease-out forwards;
     z-index: 9998;
   }
   @keyframes rpl { to { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
 
-  /* HUD */
-  #hud {
+  /* hint */
+  #hint {
     position: fixed;
-    bottom: 24px; left: 50%;
+    bottom: 72px; left: 50%;
     transform: translateX(-50%);
-    display: flex; gap: 10px;
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.18);
     z-index: 9999;
-    font-family: 'SF Mono', monospace;
-  }
-
-  .hud-pill {
-    background: rgba(26,26,46,0.07);
-    border: 1px solid rgba(26,26,46,0.15);
-    color: rgba(26,26,46,0.55);
-    font-size: 0.7rem;
-    letter-spacing: 0.06em;
-    padding: 5px 12px;
-    border-radius: 20px;
-    backdrop-filter: blur(8px);
+    pointer-events: none;
     white-space: nowrap;
-  }
-
-  .hud-pill kbd {
-    background: rgba(26,26,46,0.12);
-    border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 0.68rem;
-    color: rgba(26,26,46,0.8);
-  }
-
-  /* mode badge */
-  #mode-badge {
-    position: fixed;
-    top: 20px; right: 20px;
-    font-family: 'SF Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-    color: rgba(26,26,46,0.4);
-    z-index: 9999;
-    text-transform: uppercase;
-    transition: color 0.3s;
   }
 </style>
 </head>
 <body>
+
 <div id="cursor"></div>
-<div id="gravity-dot"></div>
-<div id="mode-badge">gravity · center</div>
+<div id="breathe"></div>
+<div id="message">touch to release · breathe</div>
 <canvas id="c"></canvas>
 
-<div id="hud">
-  <span class="hud-pill"><kbd>Hover</kbd> repel</span>
-  <span class="hud-pill"><kbd>Click</kbd> explode</span>
-  <span class="hud-pill"><kbd>G</kbd> gravity to cursor</span>
-  <span class="hud-pill"><kbd>R</kbd> reset</span>
+<div id="hint">hover gently · click to scatter · choose your mood below</div>
+<div id="moods">
+  <button class="mood-btn active" data-mood="calm">🌊 calm</button>
+  <button class="mood-btn" data-mood="joy">🌸 joy</button>
+  <button class="mood-btn" data-mood="focus">🌙 focus</button>
+  <button class="mood-btn" data-mood="energy">🔥 energy</button>
 </div>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx    = canvas.getContext('2d');
-const curEl  = document.getElementById('cursor');
-const gravDot = document.getElementById('gravity-dot');
-const modeBadge = document.getElementById('mode-badge');
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const curEl   = document.getElementById('cursor');
+const breatheEl = document.getElementById('breathe');
+const msgEl   = document.getElementById('message');
 
-let W, H;
-// gravity target — starts at center, can follow cursor
-let gx, gy;
-let gravityFollowsMouse = false;
-
+let W, H, gx, gy;
 function resize() {
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  if (!gravityFollowsMouse) { gx = W/2; gy = H/2; }
-  // reposition gravity dot if center mode
-  if (!gravityFollowsMouse) {
-    gravDot.style.left = gx + 'px';
-    gravDot.style.top  = gy + 'px';
-  }
+  gx = W / 2; gy = H / 2;
+  breatheEl.style.left = gx + 'px';
+  breatheEl.style.top  = gy + 'px';
 }
 resize();
 window.addEventListener('resize', resize);
 
-/* ── palette stored as RGB arrays to avoid NaN ── */
-const PAL_HEX = [
-  '#e63946','#457b9d','#f4a261','#2a9d8f',
-  '#e9c46a','#9b5de5','#e76f51','#4cc9f0',
-  '#c77dff','#f72585','#06d6a0','#118ab2',
-];
+/* ── MOODS ── */
+const MOODS = {
+  calm: {
+    bg: '#0f1923',
+    palette: [
+      [168,218,220],[72,167,181],[34,116,165],
+      [155,186,226],[107,152,198],[200,225,235],
+      [130,180,210],[90,140,180],
+    ],
+    gravity: 0.013,
+    damping: 0.985,
+    drift: 0.008,
+    repel: 110,
+    maxSpeed: 4,
+    breatheColor: '120,200,220',
+    message: 'breathe slowly · you are safe',
+  },
+  joy: {
+    bg: '#1a0f1e',
+    palette: [
+      [255,179,186],[255,223,186],[255,255,186],
+      [186,255,201],[186,225,255],[255,186,255],
+      [255,210,130],[210,255,190],
+    ],
+    gravity: 0.016,
+    damping: 0.980,
+    drift: 0.012,
+    repel: 120,
+    maxSpeed: 5,
+    breatheColor: '255,200,220',
+    message: 'you are full of light ✦',
+  },
+  focus: {
+    bg: '#0a0a12',
+    palette: [
+      [100,100,160],[80,80,140],[120,100,180],
+      [60,80,130],[140,120,200],[90,110,160],
+      [70,90,150],[110,90,170],
+    ],
+    gravity: 0.020,
+    damping: 0.990,
+    drift: 0.005,
+    repel: 90,
+    maxSpeed: 3,
+    breatheColor: '100,100,200',
+    message: 'clear mind · one breath at a time',
+  },
+  energy: {
+    bg: '#12080a',
+    palette: [
+      [255,100,80],[255,160,60],[255,80,120],
+      [255,200,80],[220,80,200],[255,120,60],
+      [200,60,255],[255,80,80],
+    ],
+    gravity: 0.022,
+    damping: 0.972,
+    drift: 0.018,
+    repel: 150,
+    maxSpeed: 8,
+    breatheColor: '255,120,80',
+    message: 'feel the spark · you\'ve got this ⚡',
+  },
+};
 
-function hexToRgb(hex) {
-  const h = hex.replace('#','');
-  return [
-    parseInt(h.slice(0,2),16),
-    parseInt(h.slice(2,4),16),
-    parseInt(h.slice(4,6),16),
-  ];
+let mood = MOODS.calm;
+let currentMoodKey = 'calm';
+
+function setMood(key) {
+  currentMoodKey = key;
+  mood = MOODS[key];
+  document.body.style.background = mood.bg;
+  msgEl.textContent = mood.message;
+  breatheEl.style.borderColor = `rgba(${mood.breatheColor},0.15)`;
+  // recolor balls gradually
+  balls.forEach(b => {
+    b.targetColor = mood.palette[Math.floor(Math.random() * mood.palette.length)];
+  });
+  document.querySelectorAll('.mood-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mood === key);
+  });
 }
 
-const PAL = PAL_HEX.map(hexToRgb); // [[r,g,b], ...]
+document.querySelectorAll('.mood-btn').forEach(btn => {
+  btn.addEventListener('click', () => setMood(btn.dataset.mood));
+});
 
+/* ── helpers ── */
 function lerpColor(a, b, t) {
-  return [
-    ~~(a[0] + (b[0]-a[0])*t),
-    ~~(a[1] + (b[1]-a[1])*t),
-    ~~(a[2] + (b[2]-a[2])*t),
-  ];
+  return [~~(a[0]+(b[0]-a[0])*t), ~~(a[1]+(b[1]-a[1])*t), ~~(a[2]+(b[2]-a[2])*t)];
 }
-
-function toRgb([r,g,b]) { return `rgb(${r},${g},${b})`; }
-
-// slow → cool blue, medium → base color, fast → hot red
-const COOL = [76, 201, 240];
-const HOT  = [255, 72, 0];
-
-function speedColor(baseRgb, speed, maxSpeed) {
-  const t = Math.min(speed / maxSpeed, 1);
-  if (t < 0.5) return toRgb(lerpColor(COOL, baseRgb, t * 2));
-  return toRgb(lerpColor(baseRgb, HOT, (t - 0.5) * 2));
-}
-
-function lighten(rgb, t) {
-  return toRgb(rgb.map(c => ~~(c + (255-c)*t)));
-}
+function toRgba([r,g,b], a=1) { return `rgba(${r},${g},${b},${a})`; }
+function lightenRgb(rgb, t) { return rgb.map(c => ~~(c+(255-c)*t)); }
 
 /* ── mouse ── */
-let mx = -9999, my = -9999;
-let smx = -9999, smy = -9999;
+let mx = -9999, my = -9999, smx = -9999, smy = -9999;
 let pressing = false;
 
 document.addEventListener('mousemove', e => {
   mx = e.clientX; my = e.clientY;
   curEl.style.left = mx + 'px';
   curEl.style.top  = my + 'px';
-  if (gravityFollowsMouse) {
-    gx = mx; gy = my;
-    gravDot.style.left = gx + 'px';
-    gravDot.style.top  = gy + 'px';
-  }
 });
 document.addEventListener('mouseleave', () => { mx = -9999; my = -9999; });
 
-/* ── keyboard ── */
-document.addEventListener('keydown', e => {
-  if (e.key === 'g' || e.key === 'G') {
-    gravityFollowsMouse = !gravityFollowsMouse;
-    if (!gravityFollowsMouse) {
-      gx = W/2; gy = H/2;
-      gravDot.style.left = gx + 'px';
-      gravDot.style.top  = gy + 'px';
-      gravDot.style.opacity = '1';
-      modeBadge.textContent = 'gravity · center';
-      modeBadge.style.color = 'rgba(255,255,255,0.4)';
-    } else {
-      gx = mx > 0 ? mx : W/2;
-      gy = my > 0 ? my : H/2;
-      gravDot.style.left = gx + 'px';
-      gravDot.style.top  = gy + 'px';
-      gravDot.style.opacity = '1';
-      modeBadge.textContent = 'gravity · cursor ●';
-      modeBadge.style.color = 'rgba(255,200,80,0.85)';
-    }
-  }
-  if (e.key === 'r' || e.key === 'R') {
-    balls.forEach(b => b.respawn());
-  }
-});
-
-/* ── click ── */
-function boom(x, y) {
+function scatter(x, y) {
   balls.forEach(b => {
     const dx = b.x - x, dy = b.y - y;
-    const d = Math.sqrt(dx*dx + dy*dy);
-    if (d < 220 && d > 0) {
-      const f = ((220 - d) / 220) * 9 / b.mass;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    if (d < 250) {
+      const f = ((250 - d) / 250) * 7 / b.mass;
       b.vx += (dx/d) * f;
       b.vy += (dy/d) * f;
     }
@@ -227,228 +275,241 @@ function boom(x, y) {
 function ripple(x, y) {
   const el = document.createElement('div');
   el.className = 'ripple';
-  el.style.cssText = `left:${x}px;top:${y}px;width:180px;height:180px`;
+  el.style.cssText = `left:${x}px;top:${y}px;width:220px;height:220px`;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 700);
+  setTimeout(() => el.remove(), 1300);
 }
 
 document.addEventListener('mousedown', e => {
   pressing = true;
-  curEl.style.width = '26px'; curEl.style.height = '26px';
-  curEl.style.background = 'rgba(255,100,60,0.18)';
+  curEl.classList.add('pressing');
   ripple(e.clientX, e.clientY);
-  boom(e.clientX, e.clientY);
+  scatter(e.clientX, e.clientY);
 });
 document.addEventListener('mouseup', () => {
   pressing = false;
-  curEl.style.width = '14px'; curEl.style.height = '14px';
-  curEl.style.background = 'transparent';
+  curEl.classList.remove('pressing');
 });
 
 /* touch */
 document.addEventListener('touchmove', e => {
   e.preventDefault();
   mx = e.touches[0].clientX; my = e.touches[0].clientY;
-  if (gravityFollowsMouse) { gx = mx; gy = my; }
 }, { passive: false });
 document.addEventListener('touchstart', e => {
-  mx = e.touches[0].clientX; my = e.touches[0].clientY;
-  boom(mx, my); ripple(mx, my);
+  const t = e.touches[0];
+  mx = t.clientX; my = t.clientY;
+  scatter(mx, my); ripple(mx, my);
 });
 document.addEventListener('touchend', () => { mx = -9999; my = -9999; });
 
 /* ── Ball ── */
-const MAX_SPEED = 12;
-
 class Ball {
-  constructor() { this.init(true); }
-
-  init(first = false) {
+  constructor() {
     const angle = Math.random() * Math.PI * 2;
-    const dist  = Math.random() * 80;
-    this.x  = (gx || W/2) + Math.cos(angle) * dist;
-    this.y  = (gy || H/2) + Math.sin(angle) * dist;
-    this.vx = (Math.random() - 0.5) * 1.2;
-    this.vy = (Math.random() - 0.5) * 1.2;
-    this.r  = Math.random() * 14 + 5;
-    this.mass = (this.r / 10) ** 2;        // mass ∝ area
-    this.baseColor = PAL[Math.floor(Math.random() * PAL.length)]; // [r,g,b]
-    this.baseAlpha = Math.random() * 0.3 + 0.5;
-    this.alpha  = this.baseAlpha;
+    const dist  = Math.random() * 100;
+    this.x = gx + Math.cos(angle) * dist;
+    this.y = gy + Math.sin(angle) * dist;
+    this.vx = (Math.random() - 0.5) * 0.8;
+    this.vy = (Math.random() - 0.5) * 0.8;
+    this.r  = Math.random() * 18 + 7;
+    this.mass = (this.r / 10) ** 1.5;
+    this.color = [...mood.palette[Math.floor(Math.random() * mood.palette.length)]];
+    this.targetColor = [...this.color];
+    this.alpha = 0;  // fade in
+    this.targetAlpha = Math.random() * 0.25 + 0.55;
     this.wobble = Math.random() * Math.PI * 2;
+    this.wobbleSpeed = 0.012 + Math.random() * 0.01;
     this.driftA = Math.random() * Math.PI * 2;
-    this.driftS = 0.003 + Math.random() * 0.004;
-    this.trail  = []; // v2: motion trail
+    this.driftS = 0.002 + Math.random() * 0.003;
+    this.pulsePhase = Math.random() * Math.PI * 2;
   }
 
-  respawn() { this.init(false); this.trail = []; }
-
   update() {
-    /* gravity toward gx,gy */
-    const toCx = gx - this.x;
-    const toCy = gy - this.y;
-    const distG = Math.sqrt(toCx*toCx + toCy*toCy) || 1;
-    const gStr  = (0.018 + Math.min(distG, 300) * 0.00012) / this.mass;
-    this.vx += (toCx/distG) * gStr * distG * 0.015;
-    this.vy += (toCy/distG) * gStr * distG * 0.015;
+    /* smoothly shift color toward target */
+    this.color = lerpColor(this.color, this.targetColor, 0.015);
 
-    /* mouse repulsion */
-    const REPEL = pressing ? 190 : 135;
-    const FMUL  = pressing ? 2.4 : 1.3;
+    /* fade in */
+    this.alpha += (this.targetAlpha - this.alpha) * 0.04;
+
+    /* gravity toward center */
+    const dx = gx - this.x, dy = gy - this.y;
+    const d  = Math.sqrt(dx*dx + dy*dy) || 1;
+    const gs = mood.gravity / this.mass;
+    this.vx += (dx/d) * gs * d * 0.015;
+    this.vy += (dy/d) * gs * d * 0.015;
+
+    /* mouse repulsion — very soft */
+    const REPEL = pressing ? mood.repel * 1.6 : mood.repel;
+    const FMUL  = pressing ? 2.0 : 0.9;
     const dxm = this.x - smx, dym = this.y - smy;
     const dm  = Math.sqrt(dxm*dxm + dym*dym) || 1;
     if (dm < REPEL) {
       const force = (REPEL - dm) / REPEL;
-      this.vx += (dxm/dm) * force * FMUL / this.mass;
-      this.vy += (dym/dm) * force * FMUL / this.mass;
-      this.alpha = Math.min(0.98, this.baseAlpha + force * 0.35);
-    } else {
-      this.alpha += (this.baseAlpha - this.alpha) * 0.07;
+      // ease-in so balls glide away gently, not snap
+      const eased = force * force;
+      this.vx += (dxm/dm) * eased * FMUL / this.mass;
+      this.vy += (dym/dm) * eased * FMUL / this.mass;
     }
 
-    /* organic drift */
+    /* gentle organic drift — makes cluster feel alive */
     this.driftA += this.driftS;
-    this.vx += Math.cos(this.driftA) * 0.012;
-    this.vy += Math.sin(this.driftA) * 0.012;
+    this.vx += Math.cos(this.driftA) * mood.drift;
+    this.vy += Math.sin(this.driftA) * mood.drift;
 
     /* damping */
-    this.vx *= 0.978;
-    this.vy *= 0.978;
+    this.vx *= mood.damping;
+    this.vy *= mood.damping;
 
-    /* speed cap (mass-aware — big balls cap lower) */
+    /* speed cap */
     const spd = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
-    const cap = (pressing ? MAX_SPEED : MAX_SPEED * 0.6) / this.mass;
+    const cap = (pressing ? mood.maxSpeed * 1.6 : mood.maxSpeed) / this.mass;
     if (spd > cap) { this.vx = this.vx/spd*cap; this.vy = this.vy/spd*cap; }
 
     this.x += this.vx;
     this.y += this.vy;
-    this.wobble += 0.02;
+    this.wobble += this.wobbleSpeed;
+    this.pulsePhase += 0.018;
     this.speed = spd;
-
-    /* trail — store last 10 positions */
-    this.trail.push({x: this.x, y: this.y});
-    if (this.trail.length > 10) this.trail.shift();
   }
 
   draw() {
-    const spd   = this.speed || 0;
-    const color = speedColor(this.baseColor, spd, MAX_SPEED * 0.5);
-    const pr    = this.r + Math.sin(this.wobble) * 0.6;
+    /* soft size pulse — like breathing */
+    const pulse = this.r + Math.sin(this.pulsePhase) * (this.r * 0.08);
 
-    /* trail */
-    if (spd > 0.8 && this.trail.length > 2) {
-      for (let i = 1; i < this.trail.length; i++) {
-        const t = i / this.trail.length;
-        const tp = this.trail[i-1], tc = this.trail[i];
-        ctx.save();
-        ctx.globalAlpha = t * 0.22 * this.alpha;
-        ctx.strokeStyle = color;
-        ctx.lineWidth   = pr * t * 1.1;
-        ctx.lineCap     = 'round';
-        ctx.beginPath();
-        ctx.moveTo(tp.x, tp.y);
-        ctx.lineTo(tc.x, tc.y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    /* ball */
     ctx.save();
     ctx.globalAlpha = this.alpha;
-    const g = ctx.createRadialGradient(
-      this.x - pr*0.3, this.y - pr*0.3, pr*0.04,
-      this.x, this.y, pr
-    );
-    const colorRgb = color.match(/\d+/g).map(Number);
-    g.addColorStop(0, lighten(colorRgb, 0.65));
-    g.addColorStop(1, color);
+
+    /* outer soft glow */
+    const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, pulse * 2.2);
+    glow.addColorStop(0,   toRgba(this.color, 0.18));
+    glow.addColorStop(0.5, toRgba(this.color, 0.06));
+    glow.addColorStop(1,   toRgba(this.color, 0));
     ctx.beginPath();
-    ctx.arc(this.x, this.y, pr, 0, Math.PI*2);
-    ctx.fillStyle = g;
+    ctx.arc(this.x, this.y, pulse * 2.2, 0, Math.PI*2);
+    ctx.fillStyle = glow;
     ctx.fill();
+
+    /* ball body */
+    const grad = ctx.createRadialGradient(
+      this.x - pulse*0.32, this.y - pulse*0.32, pulse*0.05,
+      this.x, this.y, pulse
+    );
+    grad.addColorStop(0, toRgba(lightenRgb(this.color, 0.7)));
+    grad.addColorStop(0.6, toRgba(this.color, 0.95));
+    grad.addColorStop(1, toRgba(this.color, 0.6));
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, pulse, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
     ctx.restore();
   }
 }
 
 /* ── init ── */
-gx = W/2; gy = H/2;
-gravDot.style.left = gx + 'px';
-gravDot.style.top  = gy + 'px';
-
-const N = 80;
+const N = 75;
 const balls = Array.from({length: N}, () => new Ball());
 
-/* ── collision ── */
+/* ── collision (no overlap) ── */
 function applyCollisions() {
   for (let i = 0; i < balls.length; i++) {
     for (let j = i+1; j < balls.length; j++) {
       const a = balls[i], b = balls[j];
-      const dx = a.x - b.x, dy = a.y - b.y;
-      const d  = Math.sqrt(dx*dx + dy*dy) || 0.001;
-      const minD = a.r + b.r + 1;
+      const dx = a.x-b.x, dy = a.y-b.y;
+      const d  = Math.sqrt(dx*dx+dy*dy) || 0.001;
+      const minD = a.r + b.r + 1.5;
       if (d < minD) {
-        const push = (minD - d) / 2;
+        const push = (minD-d)/2;
         const nx = dx/d, ny = dy/d;
-        a.x += nx * push; a.y += ny * push;
-        b.x -= nx * push; b.y -= ny * push;
-        const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
+        a.x += nx*push; a.y += ny*push;
+        b.x -= nx*push; b.y -= ny*push;
+        const dvx = a.vx-b.vx, dvy = a.vy-b.vy;
         const dot = dvx*nx + dvy*ny;
         if (dot < 0) {
-          const res = 0.55;
-          const ma = a.mass, mb = b.mass, mt = ma + mb;
-          const impulse = (1 + res) * dot / mt;
-          a.vx -= impulse * mb * nx; a.vy -= impulse * mb * ny;
-          b.vx += impulse * ma * nx; b.vy += impulse * ma * ny;
+          const res = 0.3; // low restitution = soft bounce, not elastic
+          const mt = a.mass + b.mass;
+          const imp = (1+res)*dot/mt;
+          a.vx -= imp*b.mass*nx; a.vy -= imp*b.mass*ny;
+          b.vx += imp*a.mass*nx; b.vy += imp*a.mass*ny;
         }
       }
     }
   }
 }
 
-/* ── dot grid ── */
-function drawGrid() {
+/* ── ambient particles — tiny floating dots ── */
+const PARTICLES = Array.from({length: 40}, () => ({
+  x: Math.random()*1920, y: Math.random()*1080,
+  r: Math.random()*1.5+0.3,
+  vy: -(Math.random()*0.3+0.05),
+  vx: (Math.random()-0.5)*0.15,
+  alpha: Math.random()*0.25+0.05,
+}));
+
+function updateParticles() {
+  PARTICLES.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if (p.y < -5) { p.y = H+5; p.x = Math.random()*W; }
+    if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+  });
+}
+
+function drawParticles() {
   ctx.save();
-  ctx.globalAlpha = 0.04;
-  ctx.fillStyle = '#1a1a2e';
-  for (let gxp = 40; gxp < W; gxp += 40)
-    for (let gyp = 40; gyp < H; gyp += 40) {
-      ctx.beginPath();
-      ctx.arc(gxp, gyp, 1.0, 0, Math.PI*2);
-      ctx.fill();
-    }
+  ctx.fillStyle = `rgba(${mood.breatheColor},1)`;
+  PARTICLES.forEach(p => {
+    ctx.globalAlpha = p.alpha * 0.6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+  });
   ctx.restore();
 }
 
-/* ── gravity pulse ring ── */
-let pulseR = 0;
-function drawGravityPulse() {
-  pulseR = (pulseR + 0.6) % 80;
-  ctx.save();
-  ctx.globalAlpha = (1 - pulseR/80) * 0.12;
-  ctx.strokeStyle = '#1a1a2e';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(gx, gy, pulseR, 0, Math.PI*2);
-  ctx.stroke();
-  ctx.restore();
+/* ── ambient background gradient — shifts slowly ── */
+let bgPhase = 0;
+function drawBackground() {
+  bgPhase += 0.003;
+  const [r1,g1,b1] = mood.palette[0] || [30,30,60];
+  const [r2,g2,b2] = mood.palette[3] || [10,20,50];
+
+  const bg = ctx.createRadialGradient(
+    gx + Math.cos(bgPhase)*W*0.15, gy + Math.sin(bgPhase)*H*0.15, 0,
+    gx, gy, Math.max(W,H)*0.9
+  );
+
+  // parse bg hex
+  const hex = mood.bg.replace('#','');
+  const br = parseInt(hex.slice(0,2),16);
+  const bg2 = parseInt(hex.slice(2,4),16);
+  const bb = parseInt(hex.slice(4,6),16);
+
+  bg.addColorStop(0,   `rgba(${r1},${g1},${b1},0.18)`);
+  bg.addColorStop(0.5, `rgba(${r2},${g2},${b2},0.08)`);
+  bg.addColorStop(1,   `rgba(${br},${bg2},${bb},0)`);
+
+  ctx.fillStyle = `rgb(${br},${bg2},${bb})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
 }
 
 /* ── loop ── */
 function loop() {
-  smx += (mx - smx) * 0.12;
-  smy += (my - smy) * 0.12;
+  smx += (mx - smx) * 0.08; // slower smoothing = gentler feel
+  smy += (my - smy) * 0.08;
 
-  // dark bg with slight fade for subtle trail persistence
-  ctx.fillStyle = 'rgba(247,244,239,0.92)';
-  ctx.fillRect(0, 0, W, H);
-
-  drawGrid();
-  drawGravityPulse();
+  drawBackground();
+  updateParticles();
+  drawParticles();
   applyCollisions();
   balls.forEach(b => { b.update(); b.draw(); });
   requestAnimationFrame(loop);
 }
+
+// init mood visuals
+setMood('calm');
 loop();
 </script>
 </body>
