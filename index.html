@@ -3,123 +3,149 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>gravity-balls · breathe</title>
+<title>gravity-balls v4</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ width:100%; height:100%; overflow:hidden; font-family:'Inter',sans-serif; }
+  canvas{ display:block; width:100%; height:100%; position:fixed; inset:0; z-index:0; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; }
+  /* cursor */
+  #cursor{
+    position:fixed; width:36px; height:36px; border-radius:50%;
+    pointer-events:none; transform:translate(-50%,-50%); z-index:9999;
+    border:1.5px solid rgba(255,255,255,.3); background:rgba(255,255,255,.04);
+    transition:width .3s,height .3s,background .3s,border-color .3s;
+    backdrop-filter:blur(2px);
+  }
+  #cursor.pressing{ width:64px; height:64px; background:rgba(255,255,255,.08); }
+  #cursor.dragging{ width:22px; height:22px; background:rgba(255,200,80,.2); border-color:rgba(255,200,80,.7); }
+  #cursor.blackhole{ width:50px; height:50px; background:rgba(0,0,0,.5); border-color:rgba(180,80,255,.7); border-width:2px; }
 
-  body {
-    background: #1a1a2e;
-    font-family: 'Inter', sans-serif;
-    transition: background 2s ease;
+  /* breathe ring */
+  #breathe{
+    position:fixed; border-radius:50%; pointer-events:none;
+    transform:translate(-50%,-50%); z-index:1;
+    border:1px solid rgba(255,255,255,.07);
+    animation:breathe 6s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%,100%{ width:70px; height:70px; opacity:.35; }
+    50%{ width:155px; height:155px; opacity:.08; }
   }
 
-  canvas { display: block; width: 100%; height: 100%; cursor: none; position: fixed; inset: 0; }
+  /* DOM ripple for click scatter */
+  .ripple{
+    position:fixed; border-radius:50%; pointer-events:none;
+    border:1px solid rgba(255,255,255,.18);
+    transform:translate(-50%,-50%) scale(0);
+    animation:rpl 1.2s ease-out forwards; z-index:9998;
+  }
+  @keyframes rpl{ to{ transform:translate(-50%,-50%) scale(1); opacity:0; } }
 
-  /* custom cursor — soft circle */
-  #cursor {
-    position: fixed;
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    z-index: 9999;
-    border: 1.5px solid rgba(255,255,255,0.3);
-    background: rgba(255,255,255,0.04);
-    transition: width 0.4s ease, height 0.4s ease, background 0.4s ease, border-color 0.4s;
-    backdrop-filter: blur(2px);
+  /* black hole cursor ring */
+  .bh-ring{
+    position:fixed; border-radius:50%; pointer-events:none;
+    border:1.5px solid rgba(160,60,255,.45);
+    transform:translate(-50%,-50%) scale(0);
+    animation:bhrpl 0.8s ease-out forwards; z-index:9997;
   }
-  #cursor.pressing {
-    width: 70px; height: 70px;
-    background: rgba(255,255,255,0.08);
-  }
-
-  /* breathe ring — ambient pulse in center */
-  #breathe {
-    position: fixed;
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    z-index: 1;
-    border: 1px solid rgba(255,255,255,0.06);
-    animation: breathe 6s ease-in-out infinite;
-  }
-  @keyframes breathe {
-    0%,100% { width: 80px; height: 80px; opacity: 0.4; }
-    50%      { width: 160px; height: 160px; opacity: 0.1; }
-  }
+  @keyframes bhrpl{ to{ transform:translate(-50%,-50%) scale(1); opacity:0; } }
 
   /* top message */
-  #message {
-    position: fixed;
-    top: 32px; left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.75rem;
-    font-weight: 300;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.25);
-    z-index: 9999;
-    pointer-events: none;
-    transition: opacity 1s;
-    white-space: nowrap;
+  #message{
+    position:fixed; top:26px; left:50%; transform:translateX(-50%);
+    font-size:.7rem; font-weight:300; letter-spacing:.3em; text-transform:uppercase;
+    color:rgba(255,255,255,.2); z-index:9999; pointer-events:none; white-space:nowrap;
+    transition:opacity .8s, color .5s;
   }
 
-  /* mood selector */
-  #moods {
-    position: fixed;
-    bottom: 28px; left: 50%;
-    transform: translateX(-50%);
-    display: flex; gap: 10px;
-    z-index: 9999;
+  /* hint bar */
+  #hint{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    display:flex; gap:14px; z-index:300; pointer-events:none;
+  }
+  .hint-pill{
+    font-size:.58rem; letter-spacing:.14em; text-transform:uppercase;
+    color:rgba(255,255,255,.18); white-space:nowrap;
+  }
+  .hint-pill kbd{
+    background:rgba(255,255,255,.08); border-radius:3px;
+    padding:1px 5px; font-size:.58rem; color:rgba(255,255,255,.35);
+    font-family:'Inter',sans-serif;
   }
 
-  .mood-btn {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: rgba(255,255,255,0.45);
-    font-family: 'Inter', sans-serif;
-    font-size: 0.68rem;
-    font-weight: 300;
-    letter-spacing: 0.12em;
-    padding: 6px 16px;
-    border-radius: 30px;
-    cursor: pointer;
-    transition: background 0.3s, color 0.3s, border-color 0.3s, transform 0.2s;
-    backdrop-filter: blur(10px);
+  /* side panel */
+  #panel{
+    position:fixed; right:0; top:0; bottom:0; width:272px;
+    background:rgba(6,6,14,.82); backdrop-filter:blur(20px);
+    border-left:1px solid rgba(255,255,255,.07);
+    z-index:400; display:flex; flex-direction:column; overflow-y:auto;
+    transform:translateX(0); transition:transform .35s cubic-bezier(.4,0,.2,1);
   }
-  .mood-btn:hover { transform: translateY(-2px); }
-  .mood-btn.active {
-    background: rgba(255,255,255,0.16);
-    border-color: rgba(255,255,255,0.3);
-    color: rgba(255,255,255,0.9);
+  #panel.hidden{ transform:translateX(100%); }
+
+  #toggle-panel{
+    position:fixed; right:14px; top:50%; transform:translateY(-50%);
+    z-index:600; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.11); color:rgba(255,255,255,.5);
+    width:26px; height:54px; border-radius:13px; cursor:pointer;
+    font-size:.65rem; display:flex; align-items:center; justify-content:center;
+    transition:background .2s, right .35s cubic-bezier(.4,0,.2,1);
+    writing-mode:vertical-rl; letter-spacing:.1em; font-family:'Inter',sans-serif;
+  }
+  #toggle-panel:hover{ background:rgba(255,255,255,.12); }
+  #toggle-panel.open{ right:286px; }
+
+  .panel-section{ padding:16px 16px 0; }
+  .panel-section:last-child{ padding-bottom:28px; }
+
+  .section-title{
+    font-size:.58rem; font-weight:500; letter-spacing:.28em; text-transform:uppercase;
+    color:rgba(255,255,255,.25); margin-bottom:12px; padding-bottom:7px;
+    border-bottom:1px solid rgba(255,255,255,.05);
   }
 
-  /* ripple */
-  .ripple {
-    position: fixed;
-    border-radius: 50%;
-    pointer-events: none;
-    border: 1px solid rgba(255,255,255,0.25);
-    transform: translate(-50%,-50%) scale(0);
-    animation: rpl 1.2s ease-out forwards;
-    z-index: 9998;
+  .preset-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .preset-btn{
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09);
+    color:rgba(255,255,255,.45); font-family:'Inter',sans-serif;
+    font-size:.6rem; padding:9px 3px; border-radius:8px; cursor:pointer;
+    transition:all .2s; text-align:center; line-height:1.5;
   }
-  @keyframes rpl { to { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+  .preset-btn:hover{ background:rgba(255,255,255,.11); color:rgba(255,255,255,.9); transform:translateY(-1px); }
+  .preset-btn.active{ background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.28); color:#fff; }
+  .preset-emoji{ display:block; font-size:1.05rem; margin-bottom:2px; }
 
-  /* hint */
-  #hint {
-    position: fixed;
-    bottom: 72px; left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.62rem;
-    letter-spacing: 0.2em;
-    color: rgba(255,255,255,0.18);
-    z-index: 9999;
-    pointer-events: none;
-    white-space: nowrap;
+  .mood-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .mood-btn{
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);
+    color:rgba(255,255,255,.4); font-family:'Inter',sans-serif;
+    font-size:.63rem; font-weight:300; padding:8px 5px; border-radius:8px;
+    cursor:pointer; transition:all .2s; text-align:center;
+  }
+  .mood-btn:hover{ background:rgba(255,255,255,.1); color:rgba(255,255,255,.85); }
+  .mood-btn.active{ background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.26); color:#fff; }
+
+  .slider-row{ margin-bottom:13px; }
+  .slider-label{ display:flex; justify-content:space-between; font-size:.68rem; color:rgba(255,255,255,.4); margin-bottom:5px; font-weight:300; }
+  .slider-label span{ color:rgba(255,255,255,.78); font-weight:400; }
+  input[type=range]{
+    width:100%; -webkit-appearance:none; height:2px; border-radius:2px;
+    outline:none; cursor:pointer; background:rgba(255,255,255,.1);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:#fff; cursor:pointer; box-shadow:0 0 8px rgba(255,255,255,.3);
+    transition:transform .15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{ transform:scale(1.35); }
+
+  /* v4 badge */
+  #v4badge{
+    position:fixed; top:22px; right:20px; z-index:9999;
+    font-size:.6rem; letter-spacing:.18em; text-transform:uppercase;
+    color:rgba(255,255,255,.2); pointer-events:none;
   }
 </style>
 </head>
@@ -127,389 +153,552 @@
 
 <div id="cursor"></div>
 <div id="breathe"></div>
-<div id="message">touch to release · breathe</div>
+<div id="message">breathe · you are here</div>
+<div id="v4badge">v4</div>
 <canvas id="c"></canvas>
 
-<div id="hint">hover gently · click to scatter · choose your mood below</div>
-<div id="moods">
-  <button class="mood-btn active" data-mood="calm">🌊 calm</button>
-  <button class="mood-btn" data-mood="joy">🌸 joy</button>
-  <button class="mood-btn" data-mood="focus">🌙 focus</button>
-  <button class="mood-btn" data-mood="energy">🔥 energy</button>
+<div id="hint">
+  <span class="hint-pill"><kbd>Click</kbd> scatter</span>
+  <span class="hint-pill"><kbd>Right-click</kbd> black hole</span>
+  <span class="hint-pill"><kbd>Drag</kbd> slingshot ball</span>
+</div>
+
+<button id="toggle-panel" class="open">‹</button>
+
+<div id="panel">
+  <div class="panel-section" style="margin-top:55px">
+    <div class="section-title">Presets</div>
+    <div class="preset-grid">
+      <button class="preset-btn" data-preset="solar"><span class="preset-emoji">🪐</span>Solar</button>
+      <button class="preset-btn" data-preset="chaos"><span class="preset-emoji">💥</span>Chaos</button>
+      <button class="preset-btn active" data-preset="zen"><span class="preset-emoji">🧘</span>Zen</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-title">Mood</div>
+    <div class="mood-grid">
+      <button class="mood-btn active" data-mood="calm">🌊 Calm</button>
+      <button class="mood-btn" data-mood="joy">🌸 Joy</button>
+      <button class="mood-btn" data-mood="focus">🌙 Focus</button>
+      <button class="mood-btn" data-mood="energy">🔥 Energy</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="section-title">Physics</div>
+    <div class="slider-row">
+      <div class="slider-label">Gravity <span id="val-gravity">0.013</span></div>
+      <input type="range" id="sl-gravity" min="0.001" max="0.06" step="0.001" value="0.013">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Ball Count <span id="val-count">75</span></div>
+      <input type="range" id="sl-count" min="10" max="200" step="1" value="75">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Ball Size <span id="val-size">1.0×</span></div>
+      <input type="range" id="sl-size" min="0.3" max="3.0" step="0.1" value="1.0">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Repulsion <span id="val-repel">110</span></div>
+      <input type="range" id="sl-repel" min="30" max="300" step="5" value="110">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Damping <span id="val-damp">0.985</span></div>
+      <input type="range" id="sl-damp" min="0.90" max="0.999" step="0.001" value="0.985">
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Speed Limit <span id="val-speed">4</span></div>
+      <input type="range" id="sl-speed" min="1" max="20" step="0.5" value="4">
+    </div>
+  </div>
 </div>
 
 <script>
-const canvas  = document.getElementById('c');
-const ctx     = canvas.getContext('2d');
-const curEl   = document.getElementById('cursor');
+// ── Canvas ──
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const curEl  = document.getElementById('cursor');
 const breatheEl = document.getElementById('breathe');
-const msgEl   = document.getElementById('message');
+const msgEl  = document.getElementById('message');
 
 let W, H, gx, gy;
-function resize() {
+function resize(){
   W = canvas.width  = window.innerWidth;
   H = canvas.height = window.innerHeight;
-  gx = W / 2; gy = H / 2;
-  breatheEl.style.left = gx + 'px';
-  breatheEl.style.top  = gy + 'px';
+  gx = W/2; gy = H/2;
+  breatheEl.style.left = gx+'px';
+  breatheEl.style.top  = gy+'px';
+  buildVig();
 }
 resize();
 window.addEventListener('resize', resize);
 
-/* ── MOODS ── */
+// ── Params ──
+const P = { gravity:.013, repel:110, sizeScale:1.0, damping:.985, maxSpeed:4, drift:.008 };
+
+// ── Moods ──
 const MOODS = {
-  calm: {
-    bg: '#0f1923',
-    palette: [
-      [168,218,220],[72,167,181],[34,116,165],
-      [155,186,226],[107,152,198],[200,225,235],
-      [130,180,210],[90,140,180],
-    ],
-    gravity: 0.013,
-    damping: 0.985,
-    drift: 0.008,
-    repel: 110,
-    maxSpeed: 4,
-    breatheColor: '120,200,220',
-    message: 'breathe slowly · you are safe',
-  },
-  joy: {
-    bg: '#1a0f1e',
-    palette: [
-      [255,179,186],[255,223,186],[255,255,186],
-      [186,255,201],[186,225,255],[255,186,255],
-      [255,210,130],[210,255,190],
-    ],
-    gravity: 0.016,
-    damping: 0.980,
-    drift: 0.012,
-    repel: 120,
-    maxSpeed: 5,
-    breatheColor: '255,200,220',
-    message: 'you are full of light ✦',
-  },
-  focus: {
-    bg: '#0a0a12',
-    palette: [
-      [100,100,160],[80,80,140],[120,100,180],
-      [60,80,130],[140,120,200],[90,110,160],
-      [70,90,150],[110,90,170],
-    ],
-    gravity: 0.020,
-    damping: 0.990,
-    drift: 0.005,
-    repel: 90,
-    maxSpeed: 3,
-    breatheColor: '100,100,200',
-    message: 'clear mind · one breath at a time',
-  },
-  energy: {
-    bg: '#12080a',
-    palette: [
-      [255,100,80],[255,160,60],[255,80,120],
-      [255,200,80],[220,80,200],[255,120,60],
-      [200,60,255],[255,80,80],
-    ],
-    gravity: 0.022,
-    damping: 0.972,
-    drift: 0.018,
-    repel: 150,
-    maxSpeed: 8,
-    breatheColor: '255,120,80',
-    message: 'feel the spark · you\'ve got this ⚡',
-  },
+  calm:  { bg:'#0b1520', palette:[[168,218,220],[72,167,181],[34,116,165],[155,186,226],[107,152,198],[200,225,235],[130,180,210],[90,140,180]], breatheColor:'120,200,220', message:'breathe slowly · you are safe' },
+  joy:   { bg:'#140d1a', palette:[[255,179,186],[255,223,186],[255,255,186],[186,255,201],[186,225,255],[255,186,255],[255,210,130],[210,255,190]], breatheColor:'255,200,220', message:'you are full of light ✦' },
+  focus: { bg:'#080810', palette:[[100,100,160],[80,80,140],[120,100,180],[60,80,130],[140,120,200],[90,110,160],[70,90,150],[110,90,170]], breatheColor:'100,100,200', message:'clear mind · one breath at a time' },
+  energy:{ bg:'#100608', palette:[[255,100,80],[255,160,60],[255,80,120],[255,200,80],[220,80,200],[255,120,60],[200,60,255],[255,80,80]], breatheColor:'255,120,80', message:'feel the spark · you\'ve got this ⚡' },
+};
+
+const PRESETS = {
+  solar:{ gravity:.007, repel:55,  sizeScale:1.5, damping:.998, maxSpeed:5,  drift:.022 },
+  chaos:{ gravity:.038, repel:210, sizeScale:.65, damping:.958, maxSpeed:18, drift:.03  },
+  zen:  { gravity:.013, repel:110, sizeScale:1.0, damping:.985, maxSpeed:4,  drift:.008 },
 };
 
 let mood = MOODS.calm;
-let currentMoodKey = 'calm';
 
-function setMood(key) {
-  currentMoodKey = key;
+function setMood(key){
   mood = MOODS[key];
   document.body.style.background = mood.bg;
   msgEl.textContent = mood.message;
-  breatheEl.style.borderColor = `rgba(${mood.breatheColor},0.15)`;
-  // recolor balls gradually
-  balls.forEach(b => {
-    b.targetColor = mood.palette[Math.floor(Math.random() * mood.palette.length)];
-  });
-  document.querySelectorAll('.mood-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mood === key);
-  });
+  breatheEl.style.borderColor = `rgba(${mood.breatheColor},.13)`;
+  balls.forEach(b=>{ b.targetColor = mood.palette[Math.floor(Math.random()*mood.palette.length)]; });
+  document.querySelectorAll('.mood-btn').forEach(b=>b.classList.toggle('active', b.dataset.mood===key));
 }
 
-document.querySelectorAll('.mood-btn').forEach(btn => {
-  btn.addEventListener('click', () => setMood(btn.dataset.mood));
-});
-
-/* ── helpers ── */
-function lerpColor(a, b, t) {
-  return [~~(a[0]+(b[0]-a[0])*t), ~~(a[1]+(b[1]-a[1])*t), ~~(a[2]+(b[2]-a[2])*t)];
+function applyPreset(key){
+  Object.assign(P, PRESETS[key]);
+  document.getElementById('sl-gravity').value = P.gravity;
+  document.getElementById('sl-repel').value   = P.repel;
+  document.getElementById('sl-size').value    = P.sizeScale;
+  document.getElementById('sl-damp').value    = P.damping;
+  document.getElementById('sl-speed').value   = P.maxSpeed;
+  updateLabels();
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active', b.dataset.preset===key));
 }
-function toRgba([r,g,b], a=1) { return `rgba(${r},${g},${b},${a})`; }
-function lightenRgb(rgb, t) { return rgb.map(c => ~~(c+(255-c)*t)); }
 
-/* ── mouse ── */
-let mx = -9999, my = -9999, smx = -9999, smy = -9999;
-let pressing = false;
+// ── Helpers ──
+function lerpC(a,b,t){ return [~~(a[0]+(b[0]-a[0])*t),~~(a[1]+(b[1]-a[1])*t),~~(a[2]+(b[2]-a[2])*t)]; }
+function toRgba([r,g,b],a=1){ return `rgba(${r},${g},${b},${a})`; }
+function lightenRgb(rgb,t){ return rgb.map(c=>~~(c+(255-c)*t)); }
 
-document.addEventListener('mousemove', e => {
+// ── BLACK HOLE state ──
+let blackHole = null; // { x, y, strength, life, maxLife }
+const BH_DURATION = 2200; // ms
+
+// ── DRAG / SLINGSHOT state ──
+let dragBall = null;
+let dragOffX = 0, dragOffY = 0;
+let dragHistory = []; // last positions for velocity calc
+
+// ── COLLISION RIPPLES pool ──
+const collRipples = []; // { x, y, r, maxR, alpha, color }
+
+// ── Mouse state ──
+let mx=-9999, my=-9999, smx=-9999, smy=-9999, pressing=false;
+
+document.addEventListener('mousemove', e=>{
   mx = e.clientX; my = e.clientY;
-  curEl.style.left = mx + 'px';
-  curEl.style.top  = my + 'px';
-});
-document.addEventListener('mouseleave', () => { mx = -9999; my = -9999; });
+  curEl.style.left = mx+'px'; curEl.style.top = my+'px';
 
-function scatter(x, y) {
-  balls.forEach(b => {
-    const dx = b.x - x, dy = b.y - y;
-    const d = Math.sqrt(dx*dx + dy*dy) || 1;
-    if (d < 250) {
-      const f = ((250 - d) / 250) * 7 / b.mass;
-      b.vx += (dx/d) * f;
-      b.vy += (dy/d) * f;
+  if(dragBall){
+    dragBall.x = mx - dragOffX;
+    dragBall.y = my - dragOffY;
+    dragBall.vx = 0; dragBall.vy = 0;
+    dragHistory.push({ x: dragBall.x, y: dragBall.y, t: Date.now() });
+    if(dragHistory.length > 8) dragHistory.shift();
+  }
+});
+document.addEventListener('mouseleave', ()=>{ mx=-9999; my=-9999; });
+
+// left-click: scatter OR start drag
+document.addEventListener('mousedown', e=>{
+  if(e.button !== 0) return;
+  if(e.target.closest('#panel,#toggle-panel')) return;
+
+  // try to grab a ball first
+  const picked = balls.find(b=>{
+    const dx=b.x-e.clientX, dy=b.y-e.clientY;
+    return Math.sqrt(dx*dx+dy*dy) < b.r + 10;
+  });
+
+  if(picked){
+    dragBall = picked;
+    dragOffX = e.clientX - picked.x;
+    dragOffY = e.clientY - picked.y;
+    dragHistory = [];
+    curEl.classList.add('dragging');
+  } else {
+    pressing = true;
+    curEl.classList.add('pressing');
+    spawnDomRipple(e.clientX, e.clientY);
+    scatter(e.clientX, e.clientY);
+  }
+});
+
+document.addEventListener('mouseup', e=>{
+  if(e.button !== 0) return;
+  if(dragBall){
+    // slingshot: compute velocity from drag history
+    if(dragHistory.length >= 2){
+      const old = dragHistory[0];
+      const now = dragHistory[dragHistory.length-1];
+      const dt  = Math.max(now.t - old.t, 16);
+      dragBall.vx = (now.x - old.x) / dt * 16;
+      dragBall.vy = (now.y - old.y) / dt * 16;
     }
+    dragBall = null;
+    curEl.classList.remove('dragging');
+  } else {
+    pressing = false;
+    curEl.classList.remove('pressing');
+  }
+});
+
+// right-click: black hole
+document.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  if(e.target.closest('#panel,#toggle-panel')) return;
+  blackHole = { x: e.clientX, y: e.clientY, strength: 0.6, life: BH_DURATION, maxLife: BH_DURATION };
+  curEl.classList.add('blackhole');
+  spawnBhRipple(e.clientX, e.clientY);
+  msgEl.textContent = '⚫ black hole active';
+  setTimeout(()=>{ msgEl.textContent = mood.message; }, 2400);
+  setTimeout(()=>{ blackHole=null; curEl.classList.remove('blackhole'); }, BH_DURATION);
+});
+
+// touch
+document.addEventListener('touchmove', e=>{ e.preventDefault(); mx=e.touches[0].clientX; my=e.touches[0].clientY; if(dragBall){ dragBall.x=mx-dragOffX; dragBall.y=my-dragOffY; dragBall.vx=0; dragBall.vy=0; dragHistory.push({x:dragBall.x,y:dragBall.y,t:Date.now()}); if(dragHistory.length>8)dragHistory.shift(); } },{passive:false});
+document.addEventListener('touchstart', e=>{ const t=e.touches[0]; mx=t.clientX; my=t.clientY; const picked=balls.find(b=>{const dx=b.x-mx,dy=b.y-my; return Math.sqrt(dx*dx+dy*dy)<b.r+14;}); if(picked){dragBall=picked;dragOffX=mx-picked.x;dragOffY=my-picked.y;dragHistory=[];}else{scatter(mx,my);spawnDomRipple(mx,my);} });
+document.addEventListener('touchend', e=>{ if(dragBall){if(dragHistory.length>=2){const old=dragHistory[0],now=dragHistory[dragHistory.length-1],dt=Math.max(now.t-old.t,16);dragBall.vx=(now.x-old.x)/dt*16;dragBall.vy=(now.y-old.y)/dt*16;}dragBall=null;}mx=-9999;my=-9999; });
+
+function scatter(x,y){
+  balls.forEach(b=>{
+    const dx=b.x-x, dy=b.y-y, d=Math.sqrt(dx*dx+dy*dy)||1;
+    if(d<260){ const f=((260-d)/260)*7/b.mass; b.vx+=(dx/d)*f; b.vy+=(dy/d)*f; }
   });
 }
 
-function ripple(x, y) {
-  const el = document.createElement('div');
-  el.className = 'ripple';
-  el.style.cssText = `left:${x}px;top:${y}px;width:220px;height:220px`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1300);
+function spawnDomRipple(x,y){
+  const el=document.createElement('div'); el.className='ripple';
+  el.style.cssText=`left:${x}px;top:${y}px;width:220px;height:220px`;
+  document.body.appendChild(el); setTimeout(()=>el.remove(),1300);
 }
 
-document.addEventListener('mousedown', e => {
-  pressing = true;
-  curEl.classList.add('pressing');
-  ripple(e.clientX, e.clientY);
-  scatter(e.clientX, e.clientY);
-});
-document.addEventListener('mouseup', () => {
-  pressing = false;
-  curEl.classList.remove('pressing');
-});
+function spawnBhRipple(x,y){
+  const el=document.createElement('div'); el.className='bh-ring';
+  el.style.cssText=`left:${x}px;top:${y}px;width:200px;height:200px`;
+  document.body.appendChild(el); setTimeout(()=>el.remove(),900);
+}
 
-/* touch */
-document.addEventListener('touchmove', e => {
-  e.preventDefault();
-  mx = e.touches[0].clientX; my = e.touches[0].clientY;
-}, { passive: false });
-document.addEventListener('touchstart', e => {
-  const t = e.touches[0];
-  mx = t.clientX; my = t.clientY;
-  scatter(mx, my); ripple(mx, my);
-});
-document.addEventListener('touchend', () => { mx = -9999; my = -9999; });
-
-/* ── Ball ── */
+// ── Ball ──
 class Ball {
-  constructor() {
-    const angle = Math.random() * Math.PI * 2;
-    const dist  = Math.random() * 100;
-    this.x = gx + Math.cos(angle) * dist;
-    this.y = gy + Math.sin(angle) * dist;
-    this.vx = (Math.random() - 0.5) * 0.8;
-    this.vy = (Math.random() - 0.5) * 0.8;
-    this.r  = Math.random() * 18 + 7;
-    this.mass = (this.r / 10) ** 1.5;
-    this.color = [...mood.palette[Math.floor(Math.random() * mood.palette.length)]];
-    this.targetColor = [...this.color];
-    this.alpha = 0;  // fade in
-    this.targetAlpha = Math.random() * 0.25 + 0.55;
-    this.wobble = Math.random() * Math.PI * 2;
-    this.wobbleSpeed = 0.012 + Math.random() * 0.01;
-    this.driftA = Math.random() * Math.PI * 2;
-    this.driftS = 0.002 + Math.random() * 0.003;
-    this.pulsePhase = Math.random() * Math.PI * 2;
+  constructor(){
+    const a=Math.random()*Math.PI*2, d=Math.random()*90;
+    this.x=gx+Math.cos(a)*d; this.y=gy+Math.sin(a)*d;
+    this.vx=(Math.random()-.5)*.8; this.vy=(Math.random()-.5)*.8;
+    this.baseR=Math.random()*14+7;
+    this.color=[...mood.palette[Math.floor(Math.random()*mood.palette.length)]];
+    this.targetColor=[...this.color];
+    this.alpha=0; this.targetAlpha=Math.random()*.25+.55;
+    this.pulsePhase=Math.random()*Math.PI*2;
+    this.driftA=Math.random()*Math.PI*2;
+    this.driftS=.002+Math.random()*.003;
+    this.prevVx=0; this.prevVy=0; // for collision impact detection
   }
+  get r(){ return this.baseR*P.sizeScale; }
+  get mass(){ return (this.r/10)**1.5; }
 
-  update() {
-    /* smoothly shift color toward target */
-    this.color = lerpColor(this.color, this.targetColor, 0.015);
+  update(){
+    if(this === dragBall) return; // physics paused while dragging
 
-    /* fade in */
-    this.alpha += (this.targetAlpha - this.alpha) * 0.04;
+    this.color = lerpC(this.color, this.targetColor, .015);
+    this.alpha += (this.targetAlpha - this.alpha) * .04;
 
-    /* gravity toward center */
-    const dx = gx - this.x, dy = gy - this.y;
-    const d  = Math.sqrt(dx*dx + dy*dy) || 1;
-    const gs = mood.gravity / this.mass;
-    this.vx += (dx/d) * gs * d * 0.015;
-    this.vy += (dy/d) * gs * d * 0.015;
+    // gravity to center
+    const dx=gx-this.x, dy=gy-this.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+    this.vx += (dx/d)*(P.gravity/this.mass)*d*.015;
+    this.vy += (dy/d)*(P.gravity/this.mass)*d*.015;
 
-    /* mouse repulsion — very soft */
-    const REPEL = pressing ? mood.repel * 1.6 : mood.repel;
-    const FMUL  = pressing ? 2.0 : 0.9;
-    const dxm = this.x - smx, dym = this.y - smy;
-    const dm  = Math.sqrt(dxm*dxm + dym*dym) || 1;
-    if (dm < REPEL) {
-      const force = (REPEL - dm) / REPEL;
-      // ease-in so balls glide away gently, not snap
-      const eased = force * force;
-      this.vx += (dxm/dm) * eased * FMUL / this.mass;
-      this.vy += (dym/dm) * eased * FMUL / this.mass;
+    // black hole pull
+    if(blackHole){
+      const bhx=blackHole.x-this.x, bhy=blackHole.y-this.y;
+      const bhd=Math.sqrt(bhx*bhx+bhy*bhy)||1;
+      const pull = (blackHole.strength * 180) / (bhd * this.mass);
+      this.vx += (bhx/bhd)*pull;
+      this.vy += (bhy/bhd)*pull;
     }
 
-    /* gentle organic drift — makes cluster feel alive */
-    this.driftA += this.driftS;
-    this.vx += Math.cos(this.driftA) * mood.drift;
-    this.vy += Math.sin(this.driftA) * mood.drift;
+    // mouse repulsion
+    const REP=pressing?P.repel*1.65:P.repel;
+    const dxm=this.x-smx, dym=this.y-smy, dm=Math.sqrt(dxm*dxm+dym*dym)||1;
+    if(dm<REP){ const f=((REP-dm)/REP)**2*(pressing?2.1:.9)/this.mass; this.vx+=(dxm/dm)*f; this.vy+=(dym/dm)*f; }
 
-    /* damping */
-    this.vx *= mood.damping;
-    this.vy *= mood.damping;
+    // drift
+    this.driftA+=this.driftS;
+    this.vx+=Math.cos(this.driftA)*P.drift; this.vy+=Math.sin(this.driftA)*P.drift;
 
-    /* speed cap */
-    const spd = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
-    const cap = (pressing ? mood.maxSpeed * 1.6 : mood.maxSpeed) / this.mass;
-    if (spd > cap) { this.vx = this.vx/spd*cap; this.vy = this.vy/spd*cap; }
+    // damping + cap
+    this.vx*=P.damping; this.vy*=P.damping;
+    const spd=Math.sqrt(this.vx*this.vx+this.vy*this.vy);
+    const cap=(pressing?P.maxSpeed*1.6:P.maxSpeed)/this.mass;
+    if(spd>cap){ this.vx=this.vx/spd*cap; this.vy=this.vy/spd*cap; }
 
-    this.x += this.vx;
-    this.y += this.vy;
-    this.wobble += this.wobbleSpeed;
-    this.pulsePhase += 0.018;
-    this.speed = spd;
+    this.prevVx=this.vx; this.prevVy=this.vy;
+    this.x+=this.vx; this.y+=this.vy;
+    this.pulsePhase+=.018;
   }
 
-  draw() {
-    /* soft size pulse — like breathing */
-    const pulse = this.r + Math.sin(this.pulsePhase) * (this.r * 0.08);
-
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
-
-    /* outer soft glow */
-    const glow = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, pulse * 2.2);
-    glow.addColorStop(0,   toRgba(this.color, 0.18));
-    glow.addColorStop(0.5, toRgba(this.color, 0.06));
-    glow.addColorStop(1,   toRgba(this.color, 0));
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, pulse * 2.2, 0, Math.PI*2);
-    ctx.fillStyle = glow;
-    ctx.fill();
-
-    /* ball body */
-    const grad = ctx.createRadialGradient(
-      this.x - pulse*0.32, this.y - pulse*0.32, pulse*0.05,
-      this.x, this.y, pulse
-    );
-    grad.addColorStop(0, toRgba(lightenRgb(this.color, 0.7)));
-    grad.addColorStop(0.6, toRgba(this.color, 0.95));
-    grad.addColorStop(1, toRgba(this.color, 0.6));
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, pulse, 0, Math.PI*2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-
+  draw(){
+    const pr=this.r+Math.sin(this.pulsePhase)*(this.r*.08);
+    // dragged ball: bright outline
+    const isDragged = (this === dragBall);
+    ctx.save(); ctx.globalAlpha = isDragged ? 0.95 : this.alpha;
+    // glow
+    const glow=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,pr*2.4);
+    glow.addColorStop(0,toRgba(this.color, isDragged?.28:.14));
+    glow.addColorStop(1,toRgba(this.color,0));
+    ctx.beginPath(); ctx.arc(this.x,this.y,pr*2.4,0,Math.PI*2); ctx.fillStyle=glow; ctx.fill();
+    // body
+    const grad=ctx.createRadialGradient(this.x-pr*.32,this.y-pr*.32,pr*.05,this.x,this.y,pr);
+    grad.addColorStop(0,toRgba(lightenRgb(this.color,.72)));
+    grad.addColorStop(.6,toRgba(this.color,.95));
+    grad.addColorStop(1,toRgba(this.color,.55));
+    ctx.beginPath(); ctx.arc(this.x,this.y,pr,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+    // drag ring
+    if(isDragged){
+      ctx.strokeStyle='rgba(255,220,80,.8)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(this.x,this.y,pr+4,0,Math.PI*2); ctx.stroke();
+    }
     ctx.restore();
   }
 }
 
-/* ── init ── */
-const N = 75;
-const balls = Array.from({length: N}, () => new Ball());
+// ── Ball pool ──
+let balls = Array.from({length:75}, ()=>new Ball());
+function setBallCount(n){ if(n>balls.length){ while(balls.length<n) balls.push(new Ball()); } else balls.splice(n); }
 
-/* ── collision (no overlap) ── */
-function applyCollisions() {
-  for (let i = 0; i < balls.length; i++) {
-    for (let j = i+1; j < balls.length; j++) {
-      const a = balls[i], b = balls[j];
-      const dx = a.x-b.x, dy = a.y-b.y;
-      const d  = Math.sqrt(dx*dx+dy*dy) || 0.001;
-      const minD = a.r + b.r + 1.5;
-      if (d < minD) {
-        const push = (minD-d)/2;
-        const nx = dx/d, ny = dy/d;
-        a.x += nx*push; a.y += ny*push;
-        b.x -= nx*push; b.y -= ny*push;
-        const dvx = a.vx-b.vx, dvy = a.vy-b.vy;
-        const dot = dvx*nx + dvy*ny;
-        if (dot < 0) {
-          const res = 0.3; // low restitution = soft bounce, not elastic
-          const mt = a.mass + b.mass;
-          const imp = (1+res)*dot/mt;
-          a.vx -= imp*b.mass*nx; a.vy -= imp*b.mass*ny;
-          b.vx += imp*a.mass*nx; b.vy += imp*a.mass*ny;
+// ── Collision with ripple emission ──
+function applyCollisions(){
+  for(let i=0;i<balls.length;i++) for(let j=i+1;j<balls.length;j++){
+    const a=balls[i], b=balls[j];
+    if(a===dragBall || b===dragBall) continue;
+    const dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy)||.001, minD=a.r+b.r+1.5;
+    if(d<minD){
+      const push=(minD-d)/2, nx=dx/d, ny=dy/d;
+      a.x+=nx*push; a.y+=ny*push; b.x-=nx*push; b.y-=ny*push;
+      const dvx=a.vx-b.vx, dvy=a.vy-b.vy, dot=dvx*nx+dvy*ny;
+      if(dot<0){
+        const mt=a.mass+b.mass, imp=(1+.28)*dot/mt;
+        a.vx-=imp*b.mass*nx; a.vy-=imp*b.mass*ny;
+        b.vx+=imp*a.mass*nx; b.vy+=imp*a.mass*ny;
+
+        // ── COLLISION RIPPLE — only if impact is hard enough ──
+        const impact=Math.abs(dot);
+        if(impact > 0.8){
+          const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+          const maxR = Math.min(60, 15 + impact*8);
+          // blend both ball colors
+          const blended = lerpC(a.color, b.color, .5);
+          collRipples.push({ x:cx, y:cy, r:0, maxR, alpha:Math.min(.7, impact*.18), color:blended });
         }
       }
     }
   }
 }
 
-/* ── ambient particles — tiny floating dots ── */
-const PARTICLES = Array.from({length: 40}, () => ({
-  x: Math.random()*1920, y: Math.random()*1080,
-  r: Math.random()*1.5+0.3,
-  vy: -(Math.random()*0.3+0.05),
-  vx: (Math.random()-0.5)*0.15,
-  alpha: Math.random()*0.25+0.05,
-}));
-
-function updateParticles() {
-  PARTICLES.forEach(p => {
-    p.x += p.vx; p.y += p.vy;
-    if (p.y < -5) { p.y = H+5; p.x = Math.random()*W; }
-    if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
-  });
+// ── Draw collision ripples ──
+function drawCollRipples(){
+  for(let i=collRipples.length-1; i>=0; i--){
+    const rp=collRipples[i];
+    rp.r  += (rp.maxR - rp.r) * 0.12;
+    rp.alpha *= 0.88;
+    if(rp.alpha < 0.01){ collRipples.splice(i,1); continue; }
+    ctx.save();
+    ctx.globalAlpha = rp.alpha;
+    ctx.strokeStyle = toRgba(rp.color);
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath(); ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
 }
 
-function drawParticles() {
+// ── Draw drag slingshot line ──
+function drawDragLine(){
+  if(!dragBall) return;
+  // line from ball to gravity center showing pull-back direction
+  const ax = gx - dragBall.x, ay = gy - dragBall.y;
+  const len = Math.sqrt(ax*ax+ay*ay);
+  if(len < 5) return;
   ctx.save();
-  ctx.fillStyle = `rgba(${mood.breatheColor},1)`;
-  PARTICLES.forEach(p => {
-    ctx.globalAlpha = p.alpha * 0.6;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
-    ctx.fill();
-  });
+  ctx.globalAlpha = Math.min(.4, len/400);
+  ctx.strokeStyle = 'rgba(255,220,80,0.6)';
+  ctx.lineWidth   = 1.2;
+  ctx.setLineDash([4,6]);
+  ctx.beginPath(); ctx.moveTo(dragBall.x, dragBall.y); ctx.lineTo(gx, gy); ctx.stroke();
+  ctx.setLineDash([]);
   ctx.restore();
 }
 
-/* ── ambient background gradient — shifts slowly ── */
-let bgPhase = 0;
-function drawBackground() {
-  bgPhase += 0.003;
-  const [r1,g1,b1] = mood.palette[0] || [30,30,60];
-  const [r2,g2,b2] = mood.palette[3] || [10,20,50];
+// ── Draw black hole ──
+function drawBlackHole(){
+  if(!blackHole) return;
+  const t = blackHole.life / blackHole.maxLife; // 1→0
+  blackHole.life -= 16;
 
-  const bg = ctx.createRadialGradient(
-    gx + Math.cos(bgPhase)*W*0.15, gy + Math.sin(bgPhase)*H*0.15, 0,
-    gx, gy, Math.max(W,H)*0.9
-  );
+  // rotating glow rings
+  const time = Date.now() * 0.003;
+  for(let ring=0; ring<3; ring++){
+    const rr = 18 + ring*14;
+    const ra = 0.12 * t * (1-ring*.2);
+    ctx.save();
+    ctx.globalAlpha = ra;
+    ctx.strokeStyle = `rgba(160,60,255,1)`;
+    ctx.lineWidth = 1.5 - ring*.4;
+    ctx.beginPath();
+    ctx.arc(blackHole.x, blackHole.y, rr + Math.sin(time+ring)*4, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  // parse bg hex
-  const hex = mood.bg.replace('#','');
-  const br = parseInt(hex.slice(0,2),16);
-  const bg2 = parseInt(hex.slice(2,4),16);
-  const bb = parseInt(hex.slice(4,6),16);
+  // dark core
+  ctx.save();
+  const cg = ctx.createRadialGradient(blackHole.x, blackHole.y, 0, blackHole.x, blackHole.y, 28);
+  cg.addColorStop(0,   `rgba(0,0,0,${0.95*t})`);
+  cg.addColorStop(0.5, `rgba(40,0,80,${0.5*t})`);
+  cg.addColorStop(1,   `rgba(80,0,140,0)`);
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(blackHole.x,blackHole.y,28,0,Math.PI*2); ctx.fill();
+  ctx.restore();
 
-  bg.addColorStop(0,   `rgba(${r1},${g1},${b1},0.18)`);
-  bg.addColorStop(0.5, `rgba(${r2},${g2},${b2},0.08)`);
-  bg.addColorStop(1,   `rgba(${br},${bg2},${bb},0)`);
-
-  ctx.fillStyle = `rgb(${br},${bg2},${bb})`;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  // accretion streaks
+  ctx.save();
+  ctx.globalAlpha = 0.15*t;
+  ctx.strokeStyle = 'rgba(200,100,255,1)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<6;i++){
+    const a=time*2+i*(Math.PI/3);
+    ctx.beginPath();
+    ctx.moveTo(blackHole.x+Math.cos(a)*10, blackHole.y+Math.sin(a)*10);
+    ctx.lineTo(blackHole.x+Math.cos(a)*50, blackHole.y+Math.sin(a)*50);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
-/* ── loop ── */
-function loop() {
-  smx += (mx - smx) * 0.08; // slower smoothing = gentler feel
-  smy += (my - smy) * 0.08;
+// ── Ambient particles ──
+const PARTICLES=Array.from({length:38},()=>({
+  x:Math.random()*1920, y:Math.random()*1080,
+  r:Math.random()*1.4+.3, vy:-(Math.random()*.22+.04),
+  vx:(Math.random()-.5)*.1, alpha:Math.random()*.18+.04,
+}));
+function tickParticles(){ PARTICLES.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.y<-5){p.y=H+5;p.x=Math.random()*W;} if(p.x<0)p.x=W; if(p.x>W)p.x=0; }); }
+function drawParticles(){ ctx.save(); ctx.fillStyle=`rgba(${mood.breatheColor},1)`; PARTICLES.forEach(p=>{ ctx.globalAlpha=p.alpha*.5; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }); ctx.restore(); }
 
+// ── Aurora background ──
+const AURORA_BLOBS=Array.from({length:6},(_,i)=>({
+  x:Math.random(), y:Math.random(),
+  vx:(Math.random()-.5)*.00014, vy:(Math.random()-.5)*.00011,
+  phase:(Math.PI*2/6)*i, phaseS:.004+Math.random()*.003,
+  rx:.28+Math.random()*.22, ry:.18+Math.random()*.18, palIdx:i%8,
+}));
+
+let vigGrad=null;
+function buildVig(){
+  if(!W||!H) return;
+  vigGrad=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.72);
+  vigGrad.addColorStop(0,'rgba(0,0,0,0)');
+  vigGrad.addColorStop(.58,'rgba(0,0,0,0)');
+  vigGrad.addColorStop(1,'rgba(0,0,0,.58)');
+}
+
+let bgPhase=0;
+function drawBackground(){
+  bgPhase+=.004;
+  const hex=mood.bg.replace('#','');
+  const br=parseInt(hex.slice(0,2),16), bg_=parseInt(hex.slice(2,4),16), bb=parseInt(hex.slice(4,6),16);
+  ctx.fillStyle=`rgb(${br},${bg_},${bb})`; ctx.fillRect(0,0,W,H);
+
+  AURORA_BLOBS.forEach(blob=>{
+    blob.x+=blob.vx; blob.y+=blob.vy; blob.phase+=blob.phaseS;
+    if(blob.x<-.3)blob.x=1.3; if(blob.x>1.3)blob.x=-.3;
+    if(blob.y<-.3)blob.y=1.3; if(blob.y>1.3)blob.y=-.3;
+    const col=mood.palette[blob.palIdx%mood.palette.length]||[80,120,200];
+    const alpha=.065+Math.sin(blob.phase)*.038;
+    ctx.save(); ctx.translate(blob.x*W,blob.y*H); ctx.scale(1,blob.ry/blob.rx);
+    const g=ctx.createRadialGradient(0,0,0,0,0,blob.rx*W);
+    g.addColorStop(0,`rgba(${col[0]},${col[1]},${col[2]},${alpha})`);
+    g.addColorStop(.5,`rgba(${col[0]},${col[1]},${col[2]},${alpha*.35})`);
+    g.addColorStop(1,`rgba(${col[0]},${col[1]},${col[2]},0)`);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,blob.rx*W,0,Math.PI*2); ctx.fill(); ctx.restore();
+  });
+
+  if(smx>0&&smx<W&&smy>0&&smy<H){
+    const col=mood.palette[0]||[120,180,255];
+    const radius=pressing?W*.3:W*.18, intensity=pressing?.13:.07;
+    const mg=ctx.createRadialGradient(smx,smy,0,smx,smy,radius);
+    mg.addColorStop(0,`rgba(${col[0]},${col[1]},${col[2]},${intensity})`);
+    mg.addColorStop(.4,`rgba(${col[0]},${col[1]},${col[2]},${intensity*.28})`);
+    mg.addColorStop(1,`rgba(${col[0]},${col[1]},${col[2]},0)`);
+    ctx.fillStyle=mg; ctx.fillRect(0,0,W,H);
+  }
+
+  const cc=mood.palette[2]||[80,160,220];
+  const cg=ctx.createRadialGradient(gx,gy,0,gx,gy,W*.2);
+  cg.addColorStop(0,`rgba(${cc[0]},${cc[1]},${cc[2]},.09)`);
+  cg.addColorStop(.5,`rgba(${cc[0]},${cc[1]},${cc[2]},.025)`);
+  cg.addColorStop(1,`rgba(${cc[0]},${cc[1]},${cc[2]},0)`);
+  ctx.fillStyle=cg; ctx.fillRect(0,0,W,H);
+
+  ctx.save(); ctx.globalAlpha=.016; ctx.fillStyle='#000';
+  for(let y=0;y<H;y+=3) ctx.fillRect(0,y,W,1);
+  ctx.restore();
+
+  if(vigGrad){ ctx.fillStyle=vigGrad; ctx.fillRect(0,0,W,H); }
+}
+
+// ── Slider wiring ──
+function updateLabels(){
+  document.getElementById('val-gravity').textContent=parseFloat(document.getElementById('sl-gravity').value).toFixed(3);
+  document.getElementById('val-repel').textContent=document.getElementById('sl-repel').value;
+  document.getElementById('val-size').textContent=parseFloat(document.getElementById('sl-size').value).toFixed(1)+'×';
+  document.getElementById('val-damp').textContent=parseFloat(document.getElementById('sl-damp').value).toFixed(3);
+  document.getElementById('val-speed').textContent=document.getElementById('sl-speed').value;
+  document.getElementById('val-count').textContent=document.getElementById('sl-count').value;
+}
+function clearPreset(){ document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active')); }
+document.getElementById('sl-gravity').addEventListener('input',e=>{ P.gravity=+e.target.value; updateLabels(); clearPreset(); });
+document.getElementById('sl-repel').addEventListener('input',e=>{ P.repel=+e.target.value; updateLabels(); clearPreset(); });
+document.getElementById('sl-size').addEventListener('input',e=>{ P.sizeScale=+e.target.value; updateLabels(); clearPreset(); });
+document.getElementById('sl-damp').addEventListener('input',e=>{ P.damping=+e.target.value; updateLabels(); clearPreset(); });
+document.getElementById('sl-speed').addEventListener('input',e=>{ P.maxSpeed=+e.target.value; updateLabels(); clearPreset(); });
+document.getElementById('sl-count').addEventListener('input',e=>{ setBallCount(+e.target.value); updateLabels(); });
+
+document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>applyPreset(b.dataset.preset)));
+document.querySelectorAll('.mood-btn').forEach(b=>b.addEventListener('click',()=>setMood(b.dataset.mood)));
+
+// ── Panel toggle ──
+const panel=document.getElementById('panel');
+const toggleBtn=document.getElementById('toggle-panel');
+let panelOpen=true;
+toggleBtn.addEventListener('click',()=>{
+  panelOpen=!panelOpen;
+  panel.classList.toggle('hidden',!panelOpen);
+  toggleBtn.classList.toggle('open',panelOpen);
+  toggleBtn.textContent=panelOpen?'‹':'›';
+});
+
+// ── Loop ──
+function loop(){
+  smx+=(mx-smx)*.08; smy+=(my-smy)*.08;
   drawBackground();
-  updateParticles();
-  drawParticles();
+  tickParticles(); drawParticles();
   applyCollisions();
-  balls.forEach(b => { b.update(); b.draw(); });
+  drawCollRipples();
+  drawBlackHole();
+  drawDragLine();
+  balls.forEach(b=>{ b.update(); b.draw(); });
   requestAnimationFrame(loop);
 }
 
-// init mood visuals
 setMood('calm');
+applyPreset('zen');
+updateLabels();
 loop();
 </script>
 </body>
